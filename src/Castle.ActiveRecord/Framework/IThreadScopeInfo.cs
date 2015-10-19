@@ -53,5 +53,10 @@ namespace Castle.ActiveRecord.Framework
 		/// 	<c>true</c> if this instance has initialized scope; otherwise, <c>false</c>.
 		/// </value>
 		bool HasInitializedScope { get; }
-	}
+
+        /// <summary>
+        /// ScopeInfo may require full lock at SessionScope access
+        /// </summary>
+        bool RequiredFullLock { get; }
+    }
 }

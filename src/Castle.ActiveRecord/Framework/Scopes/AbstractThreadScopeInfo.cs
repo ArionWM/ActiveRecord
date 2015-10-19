@@ -29,11 +29,16 @@ namespace Castle.ActiveRecord.Framework.Scopes
 		/// <value>The current stack.</value>
 		public abstract Stack CurrentStack { get; }
 
-		/// <summary>
-		/// Registers the scope.
-		/// </summary>
-		/// <param name="scope">The scope.</param>
-		public void RegisterScope(ISessionScope scope)
+        /// <summary>
+        /// AbstractThreadScopeInfo doesn't require full lock at SessionScope access
+        /// </summary>
+        public virtual bool RequiredFullLock { get { return false; } }
+
+        /// <summary>
+        /// Registers the scope.
+        /// </summary>
+        /// <param name="scope">The scope.</param>
+        public void RegisterScope(ISessionScope scope)
 		{
 			CurrentStack.Push(scope);
 		}

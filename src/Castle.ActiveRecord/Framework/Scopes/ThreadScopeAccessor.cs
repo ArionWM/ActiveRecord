@@ -28,11 +28,19 @@ namespace Castle.ActiveRecord.Framework.Scopes
 
 		private IThreadScopeInfo scopeInfo;
 
-		/// <summary>
-		/// Gets the single instance.
-		/// </summary>
-		/// <value>The instance.</value>
-		public static ThreadScopeAccessor Instance
+        /// <summary>
+        /// ScopeInfo may require full lock at SessionScope access
+        /// </summary>
+        public bool RequiredFullLock
+        {
+            get { return this.scopeInfo == null ? false : this.scopeInfo.RequiredFullLock; }
+        }
+
+        /// <summary>
+        /// Gets the single instance.
+        /// </summary>
+        /// <value>The instance.</value>
+        public static ThreadScopeAccessor Instance
 		{
 			get { return instance; }
 		}

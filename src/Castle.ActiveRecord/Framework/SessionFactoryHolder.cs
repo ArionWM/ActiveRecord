@@ -32,10 +32,12 @@ namespace Castle.ActiveRecord.Framework
 	/// </remarks>
 	public class SessionFactoryHolder : MarshalByRefObject, ISessionFactoryHolder
 	{
-		private readonly Hashtable type2Conf = Hashtable.Synchronized(new Hashtable());
+        private static object _syncForAllThreats = new object();
+
+        private readonly Hashtable type2Conf = Hashtable.Synchronized(new Hashtable());
 		private readonly Hashtable type2SessFactory = Hashtable.Synchronized(new Hashtable());
-		private readonly ReaderWriterLock readerWriterLock = new ReaderWriterLock();
-		private IThreadScopeInfo threadScopeInfo;
+        private readonly ReaderWriterLockSlim readerWriterLock = new ReaderWriterLockSlim();
+        private IThreadScopeInfo threadScopeInfo;
 
 		/// <summary>
 		/// Raised when a root type is registered.
@@ -109,9 +111,9 @@ namespace Castle.ActiveRecord.Framework
 				throw new ActiveRecordException("No configuration for ActiveRecord found in the type hierarchy -> " + type.FullName);
 			}
 
-			readerWriterLock.AcquireReaderLock(-1);
+            readerWriterLock.EnterUpgradeableReadLock();
 
-			try
+            try
 			{
 				ISessionFactory sessFactory = type2SessFactory[normalizedtype] as ISessionFactory;
 
@@ -120,9 +122,9 @@ namespace Castle.ActiveRecord.Framework
 					return sessFactory;
 				}
 
-				LockCookie lc = readerWriterLock.UpgradeToWriterLock(-1);
+                readerWriterLock.EnterWriteLock();
 
-				try
+                try
 				{
 					sessFactory = type2SessFactory[normalizedtype] as ISessionFactory;
 
@@ -140,13 +142,13 @@ namespace Castle.ActiveRecord.Framework
 				}
 				finally
 				{
-					readerWriterLock.DowngradeFromWriterLock(ref lc);
-				}
+                    readerWriterLock.ExitWriteLock();
+                }
 			}
 			finally
 			{
-				readerWriterLock.ReleaseReaderLock();
-			}
+                readerWriterLock.ExitUpgradeableReadLock();
+            }
 		}
 
 		///<summary>
@@ -159,42 +161,61 @@ namespace Castle.ActiveRecord.Framework
 		///</summary>
 		public void RegisterSessionFactory(ISessionFactory sessionFactory, Type baseType)
 		{
-			readerWriterLock.AcquireWriterLock(-1);
+            readerWriterLock.EnterWriteLock();
 
-			try 
+            try 
 			{
 				type2SessFactory[baseType] = sessionFactory;
 			}
 			finally 
 			{
-				readerWriterLock.ReleaseWriterLock();
-			}
+                readerWriterLock.ExitWriteLock();
+            }
 		}
 
-		/// <summary>
-		/// Creates a session for the associated type
-		/// </summary>
-		[MethodImpl(MethodImplOptions.Synchronized)]
-		public ISession CreateSession(Type type)
-		{
-			if (threadScopeInfo.HasInitializedScope)
-			{
-				return CreateScopeSession(type);
-			}
+        /// <summary>
+        /// Creates a session for the associated type
+        /// </summary>
+        //[MethodImpl(MethodImplOptions.Synchronized)]
+        protected ISession CreateSessionI(Type type)
+        {
+            if (threadScopeInfo.HasInitializedScope)
+            {
+                return CreateScopeSession(type);
+            }
 
-			ISessionFactory sessionFactory = GetSessionFactory(type);
+            ISessionFactory sessionFactory = GetSessionFactory(type);
 
-			ISession session = OpenSession(sessionFactory);
+            ISession session = OpenSession(sessionFactory);
 
-			return session;
-		}
+            return session;
+        }
 
-		/// <summary>
-		/// Gets the type of the root.
-		/// </summary>
-		/// <param name="type">The type.</param>
-		/// <returns></returns>
-		public Type GetRootType(Type type)
+        /// <summary>
+        /// Creates a session for the associated type
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public ISession CreateSession(Type type)
+        {
+            if (threadScopeInfo.RequiredFullLock)
+                lock (_syncForAllThreats)
+                {
+                    return this.CreateSessionI(type);
+                }
+            else
+            {
+                return this.CreateSessionI(type);
+            }
+
+        }
+
+        /// <summary>
+        /// Gets the type of the root.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <returns></returns>
+        public Type GetRootType(Type type)
 		{
 			while(type != typeof(object))
 			{
